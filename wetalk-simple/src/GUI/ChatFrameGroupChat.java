@@ -6,19 +6,19 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.SystemColor;
 import java.awt.Toolkit;
-import java.awt.event.ActionEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.IOException;
 import java.net.DatagramPacket;
-import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
+import java.util.Queue;
 
-import javax.swing.AbstractAction;
-import javax.swing.Action;
 import javax.swing.JButton;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
@@ -28,38 +28,44 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.border.EmptyBorder;
 
-import usermanager.User;
-import File.FileSend;
+import message.GroupChatMessage;
 
-public class ChatFrameChat extends JFrame {
-	User ME;
-	User PEER;
-	int TalkPort;
-	
-	DatagramSocket socket = null;
-	DatagramPacket pkt = null;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import usermanager.User;
+
+public class ChatFrameGroupChat extends JFrame {
+	protected static Logger log = 
+			LoggerFactory.getLogger(ChatFrameGroupChat.class);
 
 	private JPanel contentPane;
 	private JTextField textField;
-	private JTextArea textArea;
-	private final Action action = new SwingAction();
+	private volatile JTextArea textArea;
+	int GroupListenPort=5555;
+	String groupName;
+	InetAddress groupIp;
+	User ME;
+	static Queue<GroupChatMessage> chatcontent;
 
 	/**
 	 * Create the frame.
 	 */
-	public ChatFrameChat(User me, User peer) {
-		ME = me;
-		PEER = peer;
+	public ChatFrameGroupChat(String groupName,InetAddress groupIp,User Me,Queue<GroupChatMessage> chatcontent) {
 		
-		try{
-			socket = new DatagramSocket();
-		} catch(Exception e) {
-			e.printStackTrace();			
-		}
-		
+        this.groupIp=groupIp;
+        this.groupName=groupName;
+        this.ME=Me;
+        this.chatcontent=chatcontent;
 		setIconImage(Toolkit.getDefaultToolkit().getImage("./wetalk-single/icons/title.png"));	
-		setTitle(peer.getRemark()==null? peer.getName() : peer.getRemark());
-
+        setTitle(this.groupName);
+		
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				chatExit(e);
+			}
+		});
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setBounds(100, 100, 509, 479);
 		contentPane = new JPanel();
@@ -122,35 +128,72 @@ public class ChatFrameChat extends JFrame {
 		textArea.setEditable(false);
 		scrollPane.setViewportView(textArea);
 		
-		JButton btnNewButton = new JButton("发送文件");
-		btnNewButton.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				sendFilebutton_event(e);
-			}
-		});
-		btnNewButton.setAction(action);
-		btnNewButton.setBounds(390, 10, 93, 38);
-		layeredPane.add(btnNewButton);
+		
 	}
-	
-	//发送消息事件处理
+	//显示收到的消息
+	public class MessageReceive extends Thread{
+	public void run(){
+	while(true){
+	while(!chatcontent.isEmpty()){
+	GroupChatMessage recvmsg = chatcontent.poll();
+	    if(recvmsg.getGroupIp().equals(groupIp)){
+			 switch(recvmsg.getType()){
+			 case GroupChatMessage.BUILD_GROUP_MESSAGE:		
+				  break;
+			 case GroupChatMessage.JION_GROUP_MESSAGE:
+				 break;
+			 case GroupChatMessage.LEAVE_GROUP_MESSAGE:
+				 break;
+				 //消息生产者
+			 case GroupChatMessage.CHATING_GROUP_MESSAGE:
+				 textArea.append(recvmsg.getContent()+ '\n');	//显示消息
+				 break;
+				 //前端界面线程调用队列中消息并显示
+			 default:
+				 break;
+			 }
+		
+		}
+	}
+}
+	}
+}
+	//发送消息（事件驱动）
 	protected void sendButtenEvent(){
 		String payload = textField.getText(); //获得用户名
+		//判断发送消息是否为空
 		if(payload.compareTo("")!=0 ) {
-			textArea.append(ME.getName()+":"+payload + '\n');
-			textField.setText(null);
 			
-			//TODO 发送给对端
+			textArea.append(this.ME.getName()+':');	//显示消息
+		    textArea.append(payload + '\n');	//显示消息
+			
+			textField.setText(null);//发送框的
+			//构造消息数据报
+			GroupChatMessage content=new GroupChatMessage( GroupChatMessage.CHATING_GROUP_MESSAGE ,this.GroupListenPort ,this.groupIp, this.groupName,this.ME.getName()+':'+payload);
+			try {
+				MulticastSocket ms=new MulticastSocket();
+			    byte send[]=content.srialize();
+			    DatagramPacket pkt=new DatagramPacket(send,send.length,groupIp,GroupListenPort);
+			    ms.send(pkt);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+				
 		}
 		
 	}
 	
+	//关闭窗口退出操作
+	private void chatExit(WindowEvent e){
+		log.info("finish");
+	}
+		
 	//显示会话窗口。静态方法
-	public static void showFrameChat(User me,User peer) {
+	public static void showFrameChat(String groupName,InetAddress groupIp,User Me,Queue<GroupChatMessage> chatcontent) {
 		try {
-			ChatFrameChat framechat;
-			framechat = new ChatFrameChat(me, peer);
+			ChatFrameGroupChat framechat;
+			framechat = new ChatFrameGroupChat(groupName,groupIp,Me,chatcontent);
 			framechat.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
 			// 把窗口置于中心
@@ -166,31 +209,10 @@ public class ChatFrameChat extends JFrame {
 			frameSize.height) / 2);
 			
 			framechat.setVisible(true);
-		//	framemain.working();
+			ChatFrameGroupChat.MessageReceive rece=framechat.new MessageReceive();
+		 
 		} catch (Exception e) {
 			e.printStackTrace();
-		}
-	}
-	
-	//select sendfile
-	void sendFilebutton_event(MouseEvent e){
-		File sendfile = null;
-		JFileChooser chooser = new JFileChooser();//初始化文件选择框
-		chooser.setDialogTitle("请选择文件");//设置文件选择框的标题 
-		int result =chooser.showOpenDialog(null);//弹出选择框
-		if(JFileChooser.APPROVE_OPTION == result){
-			sendfile = chooser.getSelectedFile();
-			FileSend filesender = new FileSend(this.PEER.getIPAddress(), sendfile);
-			filesender.start();
-		}
-	}
-	
-	private class SwingAction extends AbstractAction {
-		public SwingAction() {
-			putValue(NAME, "发送文件");
-			putValue(SHORT_DESCRIPTION, "Some short description");
-		}
-		public void actionPerformed(ActionEvent e) {
 		}
 	}
 }

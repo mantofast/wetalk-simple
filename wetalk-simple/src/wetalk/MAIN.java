@@ -3,6 +3,8 @@ package wetalk;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import message.GroupChatMessage;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,13 +15,14 @@ public class MAIN{
 	boolean packFrame = false;
 	static Queue<User> comeQueue;
 	static Queue<User> goQueue;
-	
+	//static Queue<GroupChatMessage> chatcontent;
 		
 	public static void main(String[] args) {
 		comeQueue = new ConcurrentLinkedQueue<>();
 		goQueue = new ConcurrentLinkedQueue<>();
 		
-		ChatFrameOnline.showFrameOnline(comeQueue, goQueue);		
+		ChatFrameOnline.showFrameOnline(comeQueue, goQueue);
+		
 	}
 
 

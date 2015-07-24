@@ -1,12 +1,10 @@
 package usermanager;
 
-import java.io.Serializable;
-
-public class User implements Serializable {
-	String name = null;	//用户名
-	String remark = null;	//备注
-	String MAC = null;		//MAC地址
-	String  IP = null;		//IP地址
+public class User implements java.io.Serializable {
+	String name;	//用户名
+	String remark;	//备注
+	String MAC;		//MAC地址
+	String  IP;		//IP地址
 	
 	public User(String na,String re,String ma,String ip){
 		name = na;
@@ -44,7 +42,6 @@ public class User implements Serializable {
 	}
 	
 	public String toString(){
-		return name + "," + (remark ==null? "NO-REMARK" :remark) + "," + (MAC ==null? "NO-MAC" :MAC) + "," + IP;
+		return name + "," + (remark ==null? "no remark" :remark) + "," + MAC + "," + IP;
 	}
-	
 }
